@@ -37,17 +37,17 @@ const int BUTTON_PINS[BUTTON_COUNT] = {
 
 const int BUTTON_OUTPUTS[BUTTON_COUNT] = {
   1,
-  2,
-  3,
   4,
   5,
   6,
+  2,
+  3,
   7,
   8,
   9,
-  10,
   11,
   12,
+  10,
 };
 
 const int READ_DELAY = 10;
@@ -55,6 +55,8 @@ const int UP_BIT = 1;
 const int DOWN_BIT = 2;
 const int LEFT_BIT = 4;
 const int RIGHT_BIT = 8;
+
+const boolean LAST_INPUT_PRIORITY = false;
 
 Bounce leftButton = Bounce(LEFT_PIN, BOUNCE_TIME);
 Bounce rightButton = Bounce(RIGHT_PIN, BOUNCE_TIME);
@@ -125,6 +127,91 @@ void updateInputs() {
   // Update each of the buttons
   for (i = 0; i < BUTTON_COUNT; i += 1) {
     buttons[i]->update();
+  }
+}
+
+void updateLeftRightDirection(Bounce _leftButton, Bounce _rightButton) {
+  if (_leftButton.fallingEdge() && _rightButton.fallingEdge()) {
+    // Both pressed at the same time, return the stick to neutral
+    #ifdef DEBUG
+    Serial.println("Left and right pressed at the same time, ignoring");
+    #endif
+
+    controller.left = true;
+    controller.right = true;
+
+    controller.direction = controller.direction & ~ LEFT_BIT;
+    controller.direction = controller.direction & ~ RIGHT_BIT;
+  } else {
+    if (_leftButton.fallingEdge()) {
+      // Left button pressed
+      // Add the left bit and remove the right bit
+
+      #ifdef DEBUG
+      Serial.println("Left pressed");
+      #endif
+
+      controller.direction = controller.direction | LEFT_BIT;
+      controller.direction = controller.direction & ~ RIGHT_BIT;
+
+      controller.left = true;
+    } else if (_leftButton.risingEdge()) {
+      // Left button released
+      // Remove the left bit
+
+      #ifdef DEBUG
+      Serial.println("Left released");
+      #endif
+
+      controller.direction = controller.direction & ~ LEFT_BIT;
+      controller.left = false;
+
+      // Add the right if it's still being held
+      if (controller.right) {
+        #ifdef DEBUG
+        Serial.println("Reverting to right");
+        #endif
+
+        controller.direction = controller.direction | RIGHT_BIT;
+      }
+    }
+
+    if (_rightButton.fallingEdge()) {
+      // Right button pressed
+      // Add the right bit and remove the left bit
+      #ifdef DEBUG
+      Serial.print("Right pressed, direction is ");
+      Serial.println(controller.direction);
+      #endif
+
+      controller.direction = controller.direction | RIGHT_BIT;
+      controller.direction = controller.direction & ~LEFT_BIT;
+
+      controller.right = true;
+
+      #ifdef DEBUG
+      Serial.print("Direction now ");
+      Serial.println(controller.direction);
+      #endif
+    } else if (_rightButton.risingEdge()) {
+      // Right button released
+      // Remove the right bit
+      #ifdef DEBUG
+      Serial.println("Right released");
+      #endif
+
+      controller.direction = controller.direction & ~ RIGHT_BIT;
+      controller.right = false;
+
+      // Add the left bit if it's still being held
+      if (controller.left) {
+        #ifdef DEBUG
+        Serial.println("Reverting to left");
+        #endif
+
+        controller.direction = controller.direction | LEFT_BIT;
+      }
+    }
   }
 }
 
@@ -206,88 +293,7 @@ void updateDirection() {
     }
   }
 
-  if (leftButton.fallingEdge() && rightButton.fallingEdge()) {
-    // Both pressed at the same time, return the stick to neutral
-    #ifdef DEBUG
-    Serial.println("Left and right pressed at the same time, ignoring");
-    #endif
-
-    controller.left = true;
-    controller.right = true;
-
-    controller.direction = controller.direction & ~ LEFT_BIT;
-    controller.direction = controller.direction & ~ RIGHT_BIT;
-  } else {
-    if (leftButton.fallingEdge()) {
-      // Left button pressed
-      // Add the left bit and remove the right bit
-
-      #ifdef DEBUG
-      Serial.println("Left pressed");
-      #endif
-
-      controller.direction = controller.direction | LEFT_BIT;
-      controller.direction = controller.direction & ~ RIGHT_BIT;
-
-      controller.left = true;
-    } else if (leftButton.risingEdge()) {
-      // Left button released
-      // Remove the left bit
-
-      #ifdef DEBUG
-      Serial.println("Left released");
-      #endif
-
-      controller.direction = controller.direction & ~ LEFT_BIT;
-      controller.left = false;
-
-      // Add the right if it's still being held
-      if (controller.right) {
-        #ifdef DEBUG
-        Serial.println("Reverting to right");
-        #endif
-
-        controller.direction = controller.direction | RIGHT_BIT;
-      }
-    }
-
-    if (rightButton.fallingEdge()) {
-      // Right button pressed
-      // Add the right bit and remove the left bit
-      #ifdef DEBUG
-      Serial.print("Right pressed, direction is ");
-      Serial.println(controller.direction);
-      #endif
-
-      controller.direction = controller.direction | RIGHT_BIT;
-      controller.direction = controller.direction & ~LEFT_BIT;
-
-      controller.right = true;
-
-      #ifdef DEBUG
-      Serial.print("Direction now ");
-      Serial.println(controller.direction);
-      #endif
-    } else if (rightButton.risingEdge()) {
-      // Right button released
-      // Remove the right bit
-      #ifdef DEBUG
-      Serial.println("Right released");
-      #endif
-
-      controller.direction = controller.direction & ~ RIGHT_BIT;
-      controller.right = false;
-
-      // Add the left bit if it's still being held
-      if (controller.left) {
-        #ifdef DEBUG
-        Serial.println("Reverting to left");
-        #endif
-
-        controller.direction = controller.direction | LEFT_BIT;
-      }
-    }
-  }
+  updateLeftRightDirection(leftButton, rightButton);
 }
 
 /**
